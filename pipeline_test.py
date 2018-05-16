@@ -8,18 +8,37 @@ from magenta.pipelines import statistics
 
 from melody_pipeline import MelodyExtractorInfo
 
+from magenta.music.midi_io import sequence_proto_to_midi_file
+
+from magenta.pipelines import note_sequence_pipelines
+from magenta.pipelines import dag_pipeline
+from magenta.pipelines import pipeline
+from magenta.protobuf import music_pb2
+from magenta.pipelines import statistics
+
+from melody_pipeline import MelodyExtractorInfo
+
+# Stretch by -5%, -2.5%, 0%, 2.5%, and 5%.
+stretch_factors = [0.95, 0.975, 1.0, 1.025, 1.05]
+
+transposition_range = range(-3, 4)
+
 def get_pipeline():
 
-    time_change_splitter = note_sequence_pipelines.TimeChangeSplitter(
-        name='TimeChangeSplitter')
+    stretch_pipeline = note_sequence_pipelines.StretchPipeline(
+        stretch_factors, name='StretchPipeline')
     quantizer = note_sequence_pipelines.Quantizer(
-        steps_per_quarter=8, name='Quantizer')
-    melody_extractor = MelodyExtractorInfo(name='MelodyExtractorInfo')
+        steps_per_second=16, name='Quantizer')
+#     melody_extractor = MelodyExtractorInfo(name='MelodyExtractorInfo')
 
-    dag ={time_change_splitter: dag_pipeline.DagInput(music_pb2.NoteSequence)}
-    dag[quantizer] = time_change_splitter
-    dag[melody_extractor] = quantizer
-    dag[dag_pipeline.DagOutput('Output')] = melody_extractor
+    transposition_pipeline = note_sequence_pipelines.TranspositionPipeline(
+        transposition_range, name= 'TranspositionPipeline')
+
+    dag ={stretch_pipeline: dag_pipeline.DagInput(music_pb2.NoteSequence)}
+    dag[quantizer] = stretch_pipeline
+    dag[transposition_pipeline] = quantizer
+#     dag[melody_extractor] = quantizer
+    dag[dag_pipeline.DagOutput('Output')] = transposition_pipeline
 
     return dag_pipeline.DAGPipeline(dag)
 
