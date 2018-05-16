@@ -11,7 +11,8 @@ MAX_VELOCITY = 127
 MAX_PITCH = 105
 
 NONE_PITCH_EVENT = 0
-VELOCITY_VALUE = [8,16,24,32,40,48,56,64,72,80,88,96,104,112,120]
+# VELOCITY_VALUE = [8,16,24,32,40,48,56,64,72,80,88,96,104,112,120]
+VELOCITY_VALUE = [63,71,79,87,95,103,111,119,127]
 MIN_DURATION = 1
 MAX_DURATION = 64
 MIN_SILENCE = 0
@@ -41,15 +42,17 @@ class MelodyEvent(object):
         assert ((MIN_DURATION <= duration) and \
                 (MIN_SILENCE <= silence) and \
                 (silence <= MAX_SILENCE))
+        assert velocity in VELOCITY_VALUE
         self.pitch = pitch
         self.duration = duration
-        self.velocity = self._get_velocity(velocity)
+        # self.velocity = self._get_velocity(velocity)
+        self.velocity = velocity
         self.silence = silence
 
-    def _get_velocity(self, ori_velocity):
-        '''Convert velocity into one of int in velocity_VALUE'''
-        assert 0 <= ori_velocity <= 127
-        return math.ceil(ori_velocity / 127 * 15) * 8
+    # def _get_velocity(self, ori_velocity):
+    #     '''Convert velocity into one of int in velocity_VALUE'''
+    #     assert 0 <= ori_velocity <= 127
+    #     return math.ceil(ori_velocity / 127 * 15) * 8
 
 
     def __repr__(self):
@@ -199,7 +202,7 @@ def _get_notes_tuple(quantized_sequence,
                     program=0,
                     filter_drums=True):
 
-    sequences_lib.assert_is_relative_quantized_sequence(quantized_sequence)
+    # sequences_lib.assert_is_relative_quantized_sequence(quantized_sequence)
 
     # no note in the quantized note sequence
     if not quantized_sequence.notes:
@@ -290,7 +293,7 @@ def extract_melodies(quantized_sequence,
                     filter_drums=True):
     '''return a list of MelodySequence, used to great 'datainfo.txt' file'''
 
-    sequences_lib.assert_is_relative_quantized_sequence(quantized_sequence)
+    sequences_lib.assert_is_quantized_sequence(quantized_sequence)
 
     melodies = []
     stats = dict()
@@ -307,6 +310,8 @@ def extract_melodies(quantized_sequence,
         lst = _get_notes_tuple(quantized_sequence,
                                 program = program,
                                 filter_drums = True)
+        lst = make_relative_velocity(lst)
+
         events = []
         for i in range(len(lst) - 1):
 
@@ -358,7 +363,7 @@ def extract_melodies_for_info(quantized_sequence,
                             filter_drums=True):
     '''return a list of MelodySequence'''
 
-    sequences_lib.assert_is_relative_quantized_sequence(quantized_sequence)
+    sequences_lib.assert_is_quantized_sequence(quantized_sequence)
 
     melodies = []
     stats = dict([(stat_name, statistics.Counter(stat_name)) for stat_name in
@@ -389,6 +394,7 @@ def extract_melodies_for_info(quantized_sequence,
         lst = _get_notes_tuple(quantized_sequence,
                                 program = program,
                                 filter_drums = True)
+        lst = make_relative_velocity(lst)
         events = []
         for i in range(len(lst) - 1):
 
@@ -401,14 +407,14 @@ def extract_melodies_for_info(quantized_sequence,
             else:
                 events.append(MelodyEvent(lst[i].pitch,
                                         lst[i].end - lst[i].start,
-                                        lst[i].velocity,
-                                        lst[i+1].start - lst[i].end))
+                                        lst[i+1].start - lst[i].end,
+                                        lst[i].velocity))
 
             if i == len(lst)-2 and (lst[i+1].start - lst[i].end <= gap_step):
                 events.append(MelodyEvent(lst[i].pitch,
                                         lst[i].end - lst[i].start,
-                                        lst[i].velocity,
-                                        lst[i+1].start - lst[i].end))
+                                        lst[i+1].start - lst[i].end,
+                                        lst[i].velocity))
 
                 orig_melodies.append(events)
 
@@ -436,3 +442,22 @@ def extract_melodies_for_info(quantized_sequence,
         melodies.append(melody)
 
     return melodies, list(stats.values())
+
+def make_relative_velocity(tuple_lst):
+
+    new_lst = []
+    max_vel = max(map(lambda a: a.velocity, tuple_lst))
+    min_vel = min(map(lambda a: a.velocity, tuple_lst))
+    ori_range = max_vel - min_vel
+    correct_range = VELOCITY_VALUE[-1] - VELOCITY_VALUE[0]
+
+    for tu in tuple_lst:
+
+        vel_idx = round(((tu.velocity - min_vel)/ ori_range) * correct_range / 8)
+        vel = VELOCITY_VALUE[vel_idx]
+        new_tu = Data(tu.pitch,
+                    tu.start,
+                    tu.end,
+                    vel)
+        new_lst.append(new_tu)
+    return new_lst
