@@ -63,8 +63,7 @@ class MelodyEvent(object):
     def __eq__(self, other):
         if not isinstance(other, MelodyEvent):
             return False
-        return (self.type == other.type and
-                self.pitch == other.pitch and
+        return (self.pitch == other.pitch and
                 self.duration == other.duration and
                 self.velocity == other.velocity)
 
@@ -199,7 +198,7 @@ class MelodySequence(EventSequence):
 
 
 def _get_notes_tuple(quantized_sequence,
-                    program=0,
+                    instrument=0,
                     filter_drums=True):
 
     # sequences_lib.assert_is_relative_quantized_sequence(quantized_sequence)
@@ -209,12 +208,12 @@ def _get_notes_tuple(quantized_sequence,
         return
     else:
         notes = sorted([n for n in quantized_sequence.notes
-                if n.program == program],
+                if n.instrument == instrument],
                 key=lambda note: note.quantized_start_step)
 
         last_quantized_step = max([n.quantized_end_step
                 for n in quantized_sequence.notes
-                if n.program == program ])
+                if n.instrument == instrument ])
 
         notes_to_populate = []
         current_notes = []
@@ -303,12 +302,12 @@ def extract_melodies(quantized_sequence,
     stats['total_length_in_pitch'] = statistics.Counter('total_length_in_pitch')
     stats['total_length_in_steps'] = statistics.Counter('total_length_in_steps')
 
-    programs = set([n.program for n in quantized_sequence.notes])
+    instruments = set([n.instrument for n in quantized_sequence.notes])
 
     orig_melodies = []
-    for program in programs:
+    for instrument in instruments:
         lst = _get_notes_tuple(quantized_sequence,
-                                program = program,
+                                instrument = instrument,
                                 filter_drums = True)
         lst = make_relative_velocity(lst)
 
@@ -358,7 +357,7 @@ def extract_melodies(quantized_sequence,
 def extract_melodies_for_info(quantized_sequence,
                             gap_step = 32,
                             min_unique_pitches=4,
-                            max_melody_events=512,
+                            max_melody_events=128,
                             min_melody_events=9,
                             filter_drums=True):
     '''return a list of MelodySequence'''
@@ -368,7 +367,9 @@ def extract_melodies_for_info(quantized_sequence,
     melodies = []
     stats = dict([(stat_name, statistics.Counter(stat_name)) for stat_name in
                 ['melodies_discarded_too_short',
-                 'melodies_discarded_too_few_pitches']])
+                 'melodies_discarded_too_few_pitches',
+                 'melodies_discarded_too_repeated',
+                 'melodies_discarded_too_repeated_long']])
 
     stats['melody_lengths_in_steps'] = statistics.Histogram(
         'melody_lengths_in_steps', [a*32 for a in
@@ -387,12 +388,12 @@ def extract_melodies_for_info(quantized_sequence,
     stats['velocity_dis'] = statistics.Histogram(
         'velocity_dis', VELOCITY_VALUE)
 
-    programs = set([n.program for n in quantized_sequence.notes])
+    instruments = set([n.instrument for n in quantized_sequence.notes])
 
     orig_melodies = []
-    for program in programs:
+    for instrument in instruments:
         lst = _get_notes_tuple(quantized_sequence,
-                                program = program,
+                                instrument = instrument,
                                 filter_drums = True)
         lst = make_relative_velocity(lst)
         events = []
@@ -424,11 +425,20 @@ def extract_melodies_for_info(quantized_sequence,
             stats['melodies_discarded_too_short'].increment()
             continue
 
+
+
         # Require a certain number of unique pitches.
         note_histogram = melody.get_note_histogram()
         unique_pitches = np.count_nonzero(note_histogram)
         if unique_pitches < min_unique_pitches:
             stats['melodies_discarded_too_few_pitches'].increment()
+            continue
+        if discard_repeated(mel):
+            stats['melodies_discarded_too_repeated'].increment()
+            continue
+
+        if discard_repeated_long(mel):
+            stats['melodies_discarded_too_repeated_long'].increment()
             continue
 
         stats['melody_lengths_in_steps'].increment(melody.total_steps)
@@ -461,3 +471,50 @@ def make_relative_velocity(tuple_lst):
                     vel)
         new_lst.append(new_tu)
     return new_lst
+
+def discard_repeated(melody):
+    i = 0
+    leng = len(melody) - 4
+    count = 0
+    while True:
+        if count == 3:
+            return True
+        if i >= leng:
+            break
+        if melody[i] == melody[i+1]:
+            if melody[i+1] == melody[i+2]:
+                if melody[i+2] == melody[i+3]:
+                    if melody[i+3] == melody[i+4]:
+                        count += 1
+                    i+=4
+                else:
+                    i+=3
+            else:
+                i+=2
+        else:
+            i+=1
+    return False
+
+def discard_repeated_long(melody):
+    i = 0
+    leng = len(melody) - 3
+    num = (len(melody) // 4) // 2
+    count = 0
+    while True:
+        if count == num:
+            return True
+        if i >= leng:
+            break
+        if melody[i].duration >= 48:
+            if melody[i+1].duration >= 48:
+                if melody[i+2].duration >= 48:
+                    if melody[i+3].duration >= 48:
+                        count += 1
+                        i+=4
+                else:
+                    i+=3
+            else:
+                i+=2
+        else:
+            i+=1
+    return False
