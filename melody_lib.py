@@ -21,6 +21,8 @@ MAX_SILENCE = 32
 DEFUALT_VELOCITY = 80
 DEFUALT_DURATION = 8
 DEFUALT_SILENCE = 0
+STEPS_PER_SECOND = 32
+MAX_EVENT_LENGTH = 128
 
 DURATION_RANGE = MAX_DURATION - MIN_DURATION + 1
 SILENCE_RANGE = MAX_SILENCE - MIN_SILENCE + 1
@@ -71,12 +73,12 @@ class MelodyEvent(object):
 class MelodySequence(EventSequence):
 
     def __init__(self, events = [], start_step = 0,
-                duration_step_per_quater = 8):
+                steps_per_second = STEPS_PER_SECOND):
 
         if isinstance(events, list):
             self._events = self._from_event_list(events)
         self._start_step = start_step
-        self._quater_step = duration_step_per_quater
+        self._steps_per_second = steps_per_second
         self._end_step = start_step + self._get_total_steps()
 
     def _from_event_list(self, events):
@@ -110,7 +112,7 @@ class MelodySequence(EventSequence):
             events = self._events.__getitem__(key)
             return type(self)(events=events,
                             start_step=self.start_step + (key.start or 0),
-                            duration_step_per_quater = self._quater_step)
+                            duration_step_per_quater = self._steps_per_second)
 
     def __len__(self):
         return len(self._events)
@@ -118,13 +120,13 @@ class MelodySequence(EventSequence):
     def __deepcopy__(self, memo=None):
         return type(self)(events=copy.deepcopy(self._events, memo),
                       start_step=self.start_step,
-                      duration_step_per_quater = self._quater_step)
+                      duration_step_per_quater = self._steps_per_second)
 
     def _reset(self):
         self._events = []
         self._start_step = 0
         self._end_step = 0
-        self._quater_step = 8
+        self._steps_per_second = STEPS_PER_SECOND
 
     def append(self, event):
         self._events.append(event)
@@ -147,8 +149,8 @@ class MelodySequence(EventSequence):
         return list(range(self._start_step, self._end_step))
 
     @property
-    def quater_step(self):
-        return self._quater_step
+    def steps_per_second(self):
+        return self._steps_per_second
 
     #Advance Method
 
@@ -158,7 +160,7 @@ class MelodySequence(EventSequence):
                     instrument = 0,
                     program = 0):
 
-        second_per_step = 60.0 / qpm / self.quater_step
+        second_per_step = self._steps_per_second
 
         sequence = music_pb2.NoteSequence()
         sequence.tempos.add().qpm = qpm
@@ -287,7 +289,7 @@ def _get_notes_tuple(quantized_sequence,
 def extract_melodies(quantized_sequence,
                     gap_step = 32,
                     min_unique_pitches=4,
-                    max_melody_events=512,
+                    max_melody_events=MAX_EVENT_LENGTH,
                     min_melody_events=9,
                     filter_drums=True):
     '''return a list of MelodySequence, used to great 'datainfo.txt' file'''
@@ -357,7 +359,7 @@ def extract_melodies(quantized_sequence,
 def extract_melodies_for_info(quantized_sequence,
                             gap_step = 32,
                             min_unique_pitches=4,
-                            max_melody_events=128,
+                            max_melody_events=MAX_EVENT_LENGTH,
                             min_melody_events=9,
                             filter_drums=True):
     '''return a list of MelodySequence'''
@@ -481,10 +483,10 @@ def discard_repeated(melody):
             return True
         if i >= leng:
             break
-        if melody[i] == melody[i+1]:
-            if melody[i+1] == melody[i+2]:
-                if melody[i+2] == melody[i+3]:
-                    if melody[i+3] == melody[i+4]:
+        if melody[i].pitch == melody[i+1].pitch:
+            if melody[i+1].pitch == melody[i+2].pitch:
+                if melody[i+2].pitch == melody[i+3].pitch:
+                    if melody[i+2].pitch == melody[i+3].pitch:
                         count += 1
                     i+=4
                 else:
@@ -510,7 +512,7 @@ def discard_repeated_long(melody):
                 if melody[i+2].duration >= 48:
                     if melody[i+3].duration >= 48:
                         count += 1
-                        i+=4
+                    i+=4
                 else:
                     i+=3
             else:
