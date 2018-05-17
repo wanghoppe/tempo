@@ -1,10 +1,12 @@
 import numpy as np
 from melody_lib import VELOCITY_VALUE
 from melody_lib import MAX_SILENCE, MIN_SILENCE, MAX_DURATION, MIN_DURATION
-from melody_lib import MelodyEvent, MelodySequence
+from melody_lib import DURATION_RANGE, SILENCE_RANGE, VELOCITY_RANGE
+from melody_lib import MelodyEvent, MelodySequence, STEPS_PER_SECOND
 from sequence_example import make_sequence_example
 
 
+DENSITY_VALUE = [1, 2, 4, 6, 8, 10, 12, 14, 16, 24, 32]
 LOWEST_MIDI_PITCH = 24
 HIGHEST_MIDI_PITCH = 105
 
@@ -19,7 +21,12 @@ class MelodyEncoderDecoder(object):
 
     @property
     def input_size(self):
-        return (self._pitch_range + 1)
+        return (self._pitch_range + 1 +
+                DURATION_RANGE +         #前一个event的duration
+                SILENCE_RANGE +          #前一个silence
+                VELOCITY_RANGE +         #前一个velocity
+                len(DENSITY_VALUE)       #前3s的平均每秒音的个数
+                )
 
     @property
     def output_size(self):
@@ -33,8 +40,41 @@ class MelodyEncoderDecoder(object):
         Returns a self.input_size length list of floats
 
         '''
+        offset = 0
         input_ = [0.0] * self.input_size
         input_[events[position].pitch - LOWEST_MIDI_PITCH] = 1.0
+        if position == 0:
+            return input_
+        else:
+            offset += self._pitch_range + 1
+            input_[offset + events[position-1].duration - MIN_DURATION] = 1.0
+            offset += DURATION_RANGE
+            input_[offset + events[position-1].silence - MIN_SILENCE] = 1.0
+            offset += SILENCE_RANGE
+            input_[offset + VELOCITY_VALUE.index(events[position-1].velocity)] = 1.0
+            offset += VELOCITY_RANGE
+
+            event_num = 0
+            second = 0.0
+            search_position = position - 1
+            while second < 3.0:
+                if search_position < 0:
+                    break
+
+                second += (events[search_position].duration + \
+                            events[search_position].silence)/STEPS_PER_SECOND
+
+                event_num += 1
+                search_position -= 1
+
+            density = event_num/ second
+            for i, val in enumerate(DENSITY_VALUE):
+                if val >= density:
+                    density_id = i
+                    break
+
+            input_[offset + density_id] = 1.0
+
         return input_
 
     def events_to_label_dict(self, events, position):
