@@ -463,7 +463,7 @@ def make_relative_velocity(tuple_lst):
     ori_range = max_vel - min_vel
     correct_range = VELOCITY_VALUE[-1] - VELOCITY_VALUE[0]
 
-    if ori_range = 0:
+    if ori_range == 0:
         new_lst = [Data(tu.pitch, tu.start, tu.end, VELOCITY_VALUE[-2])
                     for tu in new_lst]
     else:
