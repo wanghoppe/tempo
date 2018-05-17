@@ -5,15 +5,20 @@ from magenta.protobuf import music_pb2
 from magenta.pipelines import statistics
 from magenta.pipelines import pipelines_common
 
-from melody_pipeline import MelodyExtractor
+from melody_pipeline import MelodyExtractorInfo
 from encoder_decoder import MelodyEncoderDecoder
-from melody_lib import MelodySequence
+from melody_lib import MelodySequence, STEPS_PER_SECOND
+from encoder_decoder import LOWEST_MIDI_PITCH, HIGHEST_MIDI_PITCH
 import tensorflow as tf
 
 
-INPUT_DIR = 'dataset/note_sequence.tfrecord'
-OUTPUT_DIR = 'sequence_example/dataset'
+INPUT_DIR = '/home/hoppe/Code/tempo/tmp/tmp.tfrecord'
+OUTPUT_DIR = 'test/dataset'
 
+# Stretch by -10%, 0%, 10%, and 15%.
+stretch_factors = [0.9, 1.0, 1.1, 1.15]
+
+transposition_range = range(-3, 4)
 
 class EncoderPipeline(pipeline.Pipeline):
     """A Module that converts monophonic melodies to a model specific encoding."""
@@ -52,16 +57,24 @@ def get_pipeline(eval_ratio = 0.1):
     dag = {partitioner: dag_pipeline.DagInput(music_pb2.NoteSequence)}
 
     for mode in ['eval', 'training']:
-        time_change_splitter = note_sequence_pipelines.TimeChangeSplitter(
-            name='TimeChangeSplitter_' + mode)
-        quantizer = note_sequence_pipelines.Quantizer(
-            steps_per_quarter=8, name='Quantizer_' + mode)
-        melody_extractor = MelodyExtractor(name='MelodyExtractor_' + mode)
-        encoder_pipeline = EncoderPipeline(name='EncoderPipeline_' + mode)
+        stretch_pipeline = note_sequence_pipelines.StretchPipeline(
+            stretch_factors, name='StretchPipeline_' + mode)
 
-        dag[time_change_splitter] = partitioner[mode + '_melodies']
-        dag[quantizer] = time_change_splitter
-        dag[melody_extractor] = quantizer
+        quantizer = note_sequence_pipelines.Quantizer(
+            steps_per_second=STEPS_PER_SECOND, name='Quantizer_' + mode)
+
+        transposition_pipeline = note_sequence_pipelines.TranspositionPipeline(
+            transposition_range, min_pitch=LOWEST_MIDI_PITCH,
+            max_pitch=HIGHEST_MIDI_PITCH, name= 'TranspositionPipeline_' + mode)
+
+        melody_extractor = MelodyExtractorInfo(name='MelodyExtractor_' + mode)
+
+        encoder_pipeline = EncoderPipeline(name='EncoderPipeline' + mode)
+
+        dag[stretch_pipeline] = partitioner[mode + '_melodies']
+        dag[quantizer] = stretch_pipeline
+        dag[transposition_pipeline] = quantizer
+        dag[melody_extractor] = transposition_pipeline
         dag[encoder_pipeline] = melody_extractor
         dag[dag_pipeline.DagOutput(mode + '_melodies')] = encoder_pipeline
 
