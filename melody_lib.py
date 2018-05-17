@@ -463,15 +463,18 @@ def make_relative_velocity(tuple_lst):
     ori_range = max_vel - min_vel
     correct_range = VELOCITY_VALUE[-1] - VELOCITY_VALUE[0]
 
-    for tu in tuple_lst:
-
-        vel_idx = round(((tu.velocity - min_vel)/ ori_range) * correct_range / 8)
-        vel = VELOCITY_VALUE[vel_idx]
-        new_tu = Data(tu.pitch,
-                    tu.start,
-                    tu.end,
-                    vel)
-        new_lst.append(new_tu)
+    if ori_range = 0:
+        new_lst = [Data(tu.pitch, tu.start, tu.end, VELOCITY_VALUE[-2])
+                    for tu in new_lst]
+    else:
+        for tu in tuple_lst:
+            vel_idx = round(((tu.velocity - min_vel)/ ori_range) * correct_range / 8)
+            vel = VELOCITY_VALUE[vel_idx]
+            new_tu = Data(tu.pitch,
+                        tu.start,
+                        tu.end,
+                        vel)
+            new_lst.append(new_tu)
     return new_lst
 
 def discard_repeated(melody):
