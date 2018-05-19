@@ -160,7 +160,7 @@ class MelodySequence(EventSequence):
                     instrument = 0,
                     program = 0):
 
-        second_per_step = self._steps_per_second
+        second_per_step = 1/self._steps_per_second
 
         sequence = music_pb2.NoteSequence()
         sequence.tempos.add().qpm = qpm
