@@ -6,6 +6,7 @@ from magenta.pipelines import statistics
 from magenta.music import sequences_lib
 from collections import namedtuple
 import numpy as np
+import copy
 
 MAX_VELOCITY = 127
 MAX_PITCH = 105
@@ -47,7 +48,6 @@ class MelodyEvent(object):
         assert velocity in VELOCITY_VALUE
         self.pitch = pitch
         self.duration = duration
-        # self.velocity = self._get_velocity(velocity)
         self.velocity = velocity
         self.silence = silence
 
@@ -112,7 +112,7 @@ class MelodySequence(EventSequence):
             events = self._events.__getitem__(key)
             return type(self)(events=events,
                             start_step=self.start_step + (key.start or 0),
-                            duration_step_per_quater = self._steps_per_second)
+                            steps_per_second = self._steps_per_second)
 
     def __len__(self):
         return len(self._events)
@@ -120,7 +120,7 @@ class MelodySequence(EventSequence):
     def __deepcopy__(self, memo=None):
         return type(self)(events=copy.deepcopy(self._events, memo),
                       start_step=self.start_step,
-                      duration_step_per_quater = self._steps_per_second)
+                      steps_per_second = self._steps_per_second)
 
     def _reset(self):
         self._events = []
