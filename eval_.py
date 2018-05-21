@@ -1,9 +1,10 @@
 from training import get_build_graph_fn, TRAINING_DIR, EVAL_DIR, TRAINING_DATA
+from training import BATCH_SIZE
 from encoder_decoder import MelodyEncoderDecoder
 import tensorflow as tf
+from magenta.common import count_records
 
-NUM_BATCHES = 10
-EVAL_DATA = ['/media/hoppe/ECCC8857CC881E48/Code/tempo/sequence_example/dataset/eval_melodies.tfrecord']
+EVAL_DATA = ['/home/hoppe/Code/tempo/training_data/eval_melodies.tfrecord']
 
 class EvalLoggingTensorHook(tf.train.LoggingTensorHook):
   """A revised version of LoggingTensorHook to use during evaluation.
@@ -44,7 +45,7 @@ def run_eval(build_graph_fn, train_dir, eval_dir, num_batches,
 
         global_step = tf.train.get_or_create_global_step()
         loss = tf.get_collection('loss')[0]
-        loss_per_step = tf.get_collection('loss_per_step')[0]
+        loss_per_step = tf.get_collection('metrics/loss_per_step')[0]
         perplexity = tf.get_collection('metrics/perplexity')[0]
         duration_accuracy = tf.get_collection('metrics/duration_accuracy')[0]
         silence_accuracy = tf.get_collection('metrics/silence_accuracy')[0]
@@ -61,23 +62,24 @@ def run_eval(build_graph_fn, train_dir, eval_dir, num_batches,
           'velocity_accuracy':velocity_accuracy
         }
         hooks = [
-            EvalLoggingTensorHook(logging_dict, every_n_iter=num_batches),
+            tf.train.LoggingTensorHook(logging_dict, every_n_iter=num_batches),
             tf.contrib.training.StopAfterNEvalsHook(num_batches),
             tf.contrib.training.SummaryAtEndHook(eval_dir),
         ]
 
-        tf.contrib.training.evaluate_repeatedly(
+        tf.contrib.training.evaluate_once(
             train_dir,
             eval_ops=eval_ops,
-            hooks=hooks,
-            eval_interval_secs=60,
-            timeout=timeout_secs)
+            hooks=hooks)
 
 def main():
+    BATCH_SIZE = 4
     encoder = MelodyEncoderDecoder()
     build_graph_fn = get_build_graph_fn(encoder_decoder = encoder,
-        sequence_example_file_paths=TRAINING_DATA, mode = 'eval')
-    run_eval(build_graph_fn, TRAINING_DIR, EVAL_DIR, NUM_BATCHES)
+        sequence_example_file_paths=EVAL_DATA, mode = 'eval', batch_size = BATCH_SIZE)
+    num_batches = count_records(EVAL_DATA) // BATCH_SIZE
+    check_point = tf.train.latest_checkpoint(TRAINING_DIR)
+    run_eval(build_graph_fn, check_point, EVAL_DIR, num_batches)
 
 if __name__ == '__main__':
     main()
