@@ -97,7 +97,7 @@ def get_padded_batch(file_list, batch_size = 32,
 
 # TODO
 def get_padded_batch_using_quene(file_list, batch_size = 32, input_size = None,
-                                shuffle = True, mode = 'training'):
+                                shuffle = True):
     """（Using Magenta inplementation)
     (from magenta.common.sequence_example_lib)
     Reads batches of SequenceExamples from TFRecords and pads them.
