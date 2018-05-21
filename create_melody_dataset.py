@@ -12,13 +12,13 @@ from encoder_decoder import LOWEST_MIDI_PITCH, HIGHEST_MIDI_PITCH
 import tensorflow as tf
 
 
-INPUT_DIR = '/home/hoppe/Code/tempo/tmp/tmp.tfrecord'
-OUTPUT_DIR = 'test/dataset'
+INPUT_DIR = '/home/hoppe/Code/tempo/dataset/out.tfrecord'
+OUTPUT_DIR = 'training_data'
 
 # Stretch by -10%, 0%, 10%, and 15%.
 stretch_factors = [0.9, 1.0, 1.1, 1.15]
 
-transposition_range = range(-3, 4)
+transposition_range = list(range(-5, 6)) + [-12, 12]
 
 class EncoderPipeline(pipeline.Pipeline):
     """A Module that converts monophonic melodies to a model specific encoding."""
@@ -40,7 +40,7 @@ class EncoderPipeline(pipeline.Pipeline):
         return [encoded]
 
 
-def get_pipeline(eval_ratio = 0.1):
+def get_pipeline(eval_ratio = 0.02):
     """Returns the Pipeline instance which creates the RNN dataset.
 
     Args:
@@ -82,7 +82,7 @@ def get_pipeline(eval_ratio = 0.1):
 
 
 def main():
-
+    # tf.logging.set_verbosity(2)
     pipeline_instance = get_pipeline()
 
     input_dir = INPUT_DIR
