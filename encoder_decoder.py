@@ -7,8 +7,9 @@ from sequence_example import make_sequence_example
 
 
 DENSITY_VALUE = [1, 2, 4, 6, 8, 10, 12, 14, 16, 24, 32]
-LOWEST_MIDI_PITCH = 24
-HIGHEST_MIDI_PITCH = 105
+LOWEST_MIDI_PITCH = 36
+HIGHEST_MIDI_PITCH = 84
+# PITCH_RANGE = HIGHEST_MIDI_PITCH - LOWEST_MIDI_PITCH + 1
 
 class MelodyEncoderDecoder(object):
 
@@ -17,11 +18,11 @@ class MelodyEncoderDecoder(object):
 
         self._min_pitch = min_pitch
         self._max_pitch = max_pitch
-        self._pitch_range = max_pitch - min_pitch
+        self._pitch_range = max_pitch - min_pitch + 1
 
     @property
     def input_size(self):
-        return (self._pitch_range + 1 +
+        return (self._pitch_range +
                 DURATION_RANGE +         #前一个event的duration
                 SILENCE_RANGE +          #前一个silence
                 VELOCITY_RANGE +         #前一个velocity
@@ -46,7 +47,7 @@ class MelodyEncoderDecoder(object):
         if position == 0:
             return input_
         else:
-            offset += self._pitch_range + 1
+            offset += self._pitch_range
             input_[offset + events[position-1].duration - MIN_DURATION] = 1.0
             offset += DURATION_RANGE
             input_[offset + events[position-1].silence - MIN_SILENCE] = 1.0
