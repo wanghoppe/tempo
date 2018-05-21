@@ -15,9 +15,9 @@ from tensorflow.python.training import session_run_hook
 RNN_LAYERS = [256,256,256]
 BATCH_SIZE = 32
 NUM_STEP_FOR_TRAINING = 100
-TRAINING_DATA = ['sequence_example/dataset/training_melodies.tfrecord']
-TRAINING_DIR = 'training/training'
-EVAL_DIR = 'eval/eval'
+TRAINING_DATA = ['training_data/training_melodies.tfrecord']
+TRAINING_DIR = 'training'
+EVAL_DIR = 'eval'
 
 class LossTooBigHook(session_run_hook.SessionRunHook):
     """Monitors the loss tensor and stops training if loss is too build_graph_fn.
@@ -56,7 +56,7 @@ class LossTooBigHook(session_run_hook.SessionRunHook):
 def make_rnn_cell(rnn_layer_sizes,
                   dropout_keep_prob=1.0,
                   attn_length=0,
-                  base_cell=tf.contrib.rnn.GRUCell):
+                  base_cell=tf.contrib.rnn.LSTMCell):
     """Makes a RNN cell from the given hyperparameters.
 
     Args:
@@ -78,7 +78,7 @@ def make_rnn_cell(rnn_layer_sizes,
             cell = tf.contrib.rnn.AttentionCellWrapper(
                 cell, attn_length, state_is_tuple=True)
         cell = tf.contrib.rnn.DropoutWrapper(
-            cell,   output_keep_prob=dropout_keep_prob)
+            cell, output_keep_prob=dropout_keep_prob)
     cells.append(cell)
 
     cell = tf.contrib.rnn.MultiRNNCell(cells)
@@ -107,24 +107,28 @@ def get_build_graph_fn(encoder_decoder,
     Raises:
     ValueError: If mode is not 'train', 'eval', or 'generate'.
     """
-    if mode not in ('train', 'eval', 'generate'):
+    if mode not in ('train', 'eval', 'generate_from_eval', 'generate_from_list'):
         raise ValueError("The mode parameter must be 'train', 'eval', "
                          "or 'generate'. The mode parameter was: %s" % mode)
 
     input_size = encoder_decoder.input_size
     output_size = encoder_decoder.output_size
-    print('output_size',output_size)
-    print('input_size',input_size)
+    # print('output_size',output_size)
+    # print('input_size',input_size)
 
     def build():
         """Builds the Tensorflow graph."""
-                                                                        # TODO add generate
 
-        inputs, duration, silence, velocity, lengths = \
-            get_padded_batch_using_quene(
-            sequence_example_file_paths,
-            batch_size = batch_size,
-            input_size = input_size)
+        if mode != "generate_from_list":
+            inputs, duration, silence, velocity, lengths = \
+                get_padded_batch_using_quene(
+                sequence_example_file_paths,
+                batch_size = batch_size,
+                input_size = input_size,
+                shuffle = True if mode == 'train' else False)
+        else:
+            inputs = tf.placeholder(tf.float32, [1, None, input_size])
+            duration, silence, velocity, lengths= None, None, None, None
 
         cell = make_rnn_cell(
             RNN_LAYERS,
@@ -143,84 +147,111 @@ def get_build_graph_fn(encoder_decoder,
             outputs, lengths)
         logits_flat = tf.contrib.layers.linear(outputs_flat, output_size)
 
-#    if mode == 'train' or mode == 'eval':                               # TODO
-
-        duration_flat = flatten_maybe_padded_sequences(duration, lengths)
-        silence_flat = flatten_maybe_padded_sequences(silence, lengths)
-        velocity_flat = flatten_maybe_padded_sequences(velocity, lengths)
-
         duration_out_flat = logits_flat[:,:DURATION_RANGE]
         silence_out_flat = logits_flat[:,DURATION_RANGE:DURATION_RANGE + SILENCE_RANGE]
         velocity_out_flat = logits_flat[:,-VELOCITY_RANGE:]
 
-        duration_softmax_cross_entropy = \
-            tf.nn.sparse_softmax_cross_entropy_with_logits(
-            labels=duration_flat,
-            logits=duration_out_flat)
+        if mode != 'generate_from_list':
+            duration_flat = flatten_maybe_padded_sequences(duration, lengths)
+            silence_flat = flatten_maybe_padded_sequences(silence, lengths)
+            velocity_flat = flatten_maybe_padded_sequences(velocity, lengths)
 
-        silence_softmax_cross_entropy = \
-            tf.nn.sparse_softmax_cross_entropy_with_logits(
-            labels=silence_flat,
-            logits=silence_out_flat)
+            if mode == 'generate_from_eval':
+                tf.add_to_collection('duration_flat', duration_flat)
+                tf.add_to_collection('silence_flat', silence_flat)
+                tf.add_to_collection('velocity_flat', velocity_flat)
 
-        velocity_softmax_cross_entropy = \
-            tf.nn.sparse_softmax_cross_entropy_with_logits(
-            labels=velocity_flat,
-            logits=velocity_out_flat)
+            else:
+                duration_softmax_cross_entropy = \
+                    tf.nn.sparse_softmax_cross_entropy_with_logits(
+                    labels=duration_flat,
+                    logits=duration_out_flat)
 
-        duration_predictions_flat = tf.argmax(duration_out_flat, axis=1)
-        silence_predictions_flat = tf.argmax(silence_out_flat, axis=1)
-        velocity_predictions_flat = tf.argmax(velocity_out_flat, axis=1)
+                silence_softmax_cross_entropy = \
+                    tf.nn.sparse_softmax_cross_entropy_with_logits(
+                    labels=silence_flat,
+                    logits=silence_out_flat)
 
+                velocity_softmax_cross_entropy = \
+                    tf.nn.sparse_softmax_cross_entropy_with_logits(
+                    labels=velocity_flat,
+                    logits=velocity_out_flat)
 
-# TODO
-        duration_correct_predictions = tf.to_float(
-            tf.equal(duration_flat, duration_predictions_flat))
-        silence_correct_predictions = tf.to_float(
-            tf.equal(silence_flat, silence_predictions_flat))
-        velocity_correct_predictions = tf.to_float(
-            tf.equal(velocity_flat, velocity_predictions_flat))
+                concat_softmax_cross_entropy = tf.concat([
+                    duration_softmax_cross_entropy,
+                    silence_softmax_cross_entropy,
+                    velocity_softmax_cross_entropy], 0)
 
-        num_steps =  tf.reduce_sum(lengths)
-        num_steps = tf.cast(num_steps, tf.float32)
+                duration_predictions_flat = tf.argmax(duration_out_flat, axis=1)
+                silence_predictions_flat = tf.argmax(silence_out_flat, axis=1)
+                velocity_predictions_flat = tf.argmax(velocity_out_flat, axis=1)
 
-        if mode == 'train' or mode == 'eval':
-            duration_loss = tf.reduce_mean(duration_softmax_cross_entropy)
-            silence_loss = tf.reduce_mean(silence_softmax_cross_entropy)
-            velocity_loss = tf.reduce_mean(velocity_softmax_cross_entropy)
-            # total_loss = duration_loss + silence_loss + velocity_loss
-            total_loss = duration_loss + silence_loss
-            total_loss_per_step = total_loss/num_steps
-            perplexity_per_step = tf.exp(total_loss_per_step)
+                duration_correct_predictions = tf.to_float(
+                    tf.equal(duration_flat, duration_predictions_flat))
+                silence_correct_predictions = tf.to_float(
+                    tf.equal(silence_flat, silence_predictions_flat))
+                velocity_correct_predictions = tf.to_float(
+                    tf.equal(velocity_flat, velocity_predictions_flat))
 
-            perplexity = tf.exp(total_loss)
-            duration_accuracy = tf.reduce_mean(duration_correct_predictions)
-            silence_accuracy = tf.reduce_mean(silence_correct_predictions)
-            velocity_accuracy = tf.reduce_mean(velocity_correct_predictions)
+                num_steps =  tf.reduce_sum(lengths)
+                num_steps = tf.cast(num_steps, tf.float32)
 
-            optimizer = tf.train.AdamOptimizer(learning_rate=0.0001, epsilon=0.001)
+                if mode == 'train':
 
-            train_op = tf.contrib.slim.learning.create_train_op(
-                total_loss, optimizer, clip_gradient_norm=3)
-            tf.add_to_collection('train_op', train_op)
+                    total_loss = tf.reduce_mean(concat_softmax_cross_entropy) * 3
+                    total_loss_per_step = total_loss/num_steps
+                    perplexity_per_step = tf.exp(total_loss_per_step)
+                    perplexity = tf.exp(total_loss)
 
-            vars_to_summarize = {
-                'loss': total_loss,
-                'metrics/loss_per_step': total_loss_per_step,
-                'metrics/perplexity_per_step': perplexity_per_step,
-                'metrics/perplexity': perplexity,
-                'metrics/duration_accuracy': duration_accuracy,
-                'metrics/silence_accuracy': silence_accuracy,
-                'metrics/velocity_accuracy': velocity_accuracy,
-            }
+                    duration_accuracy = tf.reduce_mean(duration_correct_predictions)
+                    silence_accuracy = tf.reduce_mean(silence_correct_predictions)
+                    velocity_accuracy = tf.reduce_mean(velocity_correct_predictions)
 
+                    optimizer = tf.train.AdamOptimizer(learning_rate=0.0002,
+                                                        epsilon=0.00001)
 
-            for var_name, var_value in six.iteritems(vars_to_summarize):
-                tf.summary.scalar(var_name, var_value)
-                tf.add_to_collection(var_name, var_value)
-                tf.add_to_collection('eval_ops', var_value)
+                    train_op = tf.contrib.slim.learning.create_train_op(
+                        total_loss, optimizer, clip_gradient_norm=3)
+                    tf.add_to_collection('train_op', train_op)
 
-        elif mode == 'generate':
+                    vars_to_summarize = {
+                        'loss': total_loss,
+                        'metrics/loss_per_step': total_loss_per_step,
+                        'metrics/perplexity_per_step': perplexity_per_step,
+                        'metrics/perplexity': perplexity,
+                        'metrics/duration_accuracy': duration_accuracy,
+                        'metrics/silence_accuracy': silence_accuracy,
+                        'metrics/velocity_accuracy': velocity_accuracy,
+                    }
+                elif mode == 'eval':
+                    vars_to_summarize, update_ops =\
+                        tf.contrib.metrics.aggregate_metric_map(
+                        {
+                        'loss': tf.metrics.mean(3*concat_softmax_cross_entropy),
+                        'metrics/duration_accuracy': tf.metrics.accuracy(
+                            duration_flat, duration_predictions_flat),
+                        'metrics/silence_accuracy': tf.metrics.accuracy(
+                            silence_flat, silence_predictions_flat),
+                        'metrics/velocity_accuracy': tf.metrics.accuracy(
+                            velocity_flat, velocity_predictions_flat),
+                        'metrics/loss_per_step': tf.metrics.mean(
+                            tf.reduce_sum(3*concat_softmax_cross_entropy)/num_steps,
+                            weights=num_steps),
+                            }
+                        )
+                    for updates_op in update_ops.values():
+                        tf.add_to_collection('eval_ops', updates_op)
+
+                    vars_to_summarize['metrics/perplexity'] = tf.exp(
+                        vars_to_summarize['loss'])
+                    vars_to_summarize['metrics/perplexity_per_step'] = tf.exp(
+                        vars_to_summarize['metrics/loss_per_step'])
+
+                for var_name, var_value in six.iteritems(vars_to_summarize):
+                    tf.summary.scalar(var_name, var_value)
+                    tf.add_to_collection(var_name, var_value)
+
+        if mode.startswith('generate'):
             temperature = tf.placeholder(tf.float32, [])
             duration_softmax = tf.nn.softmax(
                 tf.div(duration_out_flat, tf.fill([DURATION_RANGE], temperature)))
@@ -230,9 +261,9 @@ def get_build_graph_fn(encoder_decoder,
                 tf.div(velocity_out_flat, tf.fill([VELOCITY_RANGE], temperature)))
             generate_dict = {
                 'inputs': inputs,
-                'duration_flat': duration_flat,
-                'silence_flat': silence_flat,
-                'velocity_flat': velocity_flat,
+                'initial_state': initial_state,
+                'final_state': final_state,
+                'temperature': temperature,
                 'duration_softmax': duration_softmax,
                 'silence_softmax': silence_softmax,
                 'velocity_softmax': velocity_softmax,
@@ -240,8 +271,6 @@ def get_build_graph_fn(encoder_decoder,
 
             for var_name, var_value in six.iteritems(generate_dict):
                 tf.add_to_collection(var_name, var_value)
-                # tf.add_to_collection('gen_ops', var_value)
-            tf.add_to_collection('temperature', temperature)
 
     return build
 
