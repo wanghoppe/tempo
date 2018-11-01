@@ -18,18 +18,21 @@ from eval_ import TRAINING_DIR, EVAL_DIR, EVAL_DATA, TRAINING_DATA
 from melody_generator import MelodyGenerator
 
 
-with open('pitch_lst.object', 'rb') as f:
+with open('twinkle_lst.object', 'rb') as f:
     PITCH_LST = pickle.load(f)
 # PITCH_LST = [60,61,65,78,65,62,34,55,56,57,58,59,60,62,62,65,65,65,69,69,54]
 CHECKPOINT_DIR = TRAINING_DIR
 OUT_DIR = 'generate/generate_from_list'
 
-RANDOM_RATE = 0.7
+RANDOM_RATE = 0.8
 TEMPERATURE = 1.0
+NUM_OUTPUT = 10
 # RANDOM_SAMPLE = False
 
 
 def main():
+    if not os.path.exists(OUT_DIR):
+        os.makedirs(OUT_DIR)
     encoder = MelodyEncoderDecoder()
     build_graph_fn = get_build_graph_fn(encoder_decoder = encoder,
                                         mode = 'generate_from_list',
@@ -41,14 +44,10 @@ def main():
                                 random_rate = RANDOM_RATE,
                                 temperature = TEMPERATURE,
                                 mode = 'generate_from_list')
-
-    melody = generator.generate_from_pitch_list(PITCH_LST)
-
-    if not os.path.exists(OUT_DIR):
-        os.makedirs(OUT_DIR)
-
-    sequence_proto_to_midi_file(melody.to_sequence(),
-                                OUT_DIR + '/generate.mid')
+    for i in range(NUM_OUTPUT):
+        melody = generator.generate_from_pitch_list(PITCH_LST)
+        sequence_proto_to_midi_file(melody.to_sequence(),
+                                    OUT_DIR + '/generate{0}.mid'.format(i))
     sequence_proto_to_midi_file(MelodySequence(PITCH_LST).to_sequence(),
                                 OUT_DIR + '/ori_pitch.mid')
 

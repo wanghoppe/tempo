@@ -1,5 +1,6 @@
 import os
 import subprocess
+import sys
 
 def midi2wav(file):
     out_name = file.split('.')[0] + '.wav'

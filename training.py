@@ -207,8 +207,8 @@ def get_build_graph_fn(encoder_decoder,
                     silence_accuracy = tf.reduce_mean(silence_correct_predictions)
                     velocity_accuracy = tf.reduce_mean(velocity_correct_predictions)
 
-                    optimizer = tf.train.AdamOptimizer(learning_rate=0.0002,
-                                                        epsilon=0.00001)
+                    optimizer = tf.train.AdamOptimizer(learning_rate=0.00005,
+                                                        epsilon=0.000001)
 
                     train_op = tf.contrib.slim.learning.create_train_op(
                         total_loss, optimizer, clip_gradient_norm=3)
