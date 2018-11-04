@@ -20,7 +20,7 @@ TRAINING_DIR = 'training'
 EVAL_DIR = 'eval'
 
 class LossTooBigHook(session_run_hook.SessionRunHook):
-    """Monitors the loss tensor and stops training if loss is too build_graph_fn.
+    """Monitors the loss tensor and stops training if loss is too big.
 
     Can either fail with exception or just stop training.
     """

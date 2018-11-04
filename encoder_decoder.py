@@ -84,7 +84,7 @@ class MelodyEncoderDecoder(object):
         Indices[0, 3]:
         [0]: duration in steps (1/32 note) in that pitch
         [1]: silence in steps (1/32 note) after that pitch
-        [2]: one of values in VELOCITY_VALUE, reprenting the velocity
+        [2]: one of values in VELOCITY_VALUE, representing the velocity
         '''
 
         label = {'duration':events[position].duration - MIN_DURATION,

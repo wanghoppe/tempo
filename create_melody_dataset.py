@@ -44,7 +44,6 @@ def get_pipeline(eval_ratio = 0.02):
     """Returns the Pipeline instance which creates the RNN dataset.
 
     Args:
-    config: A MelodyRnnConfig object.
     eval_ratio: Fraction of input to set aside for evaluation set.
 
     Returns:

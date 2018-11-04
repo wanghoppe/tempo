@@ -39,7 +39,7 @@ class MelodyExtractor(pipeline.Pipeline):
 
 
 class MelodyExtractorInfo(pipeline.Pipeline):
-    '''used to get the whole dataset info, not used in training'''
+    '''used to get the whole dataset info'''
     def __init__(self,
                 min_unique_pitches=5,
                 max_melody_events=MAX_EVENT_LENGTH,
