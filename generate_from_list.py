@@ -18,9 +18,15 @@ from eval_ import TRAINING_DIR, EVAL_DIR, EVAL_DATA, TRAINING_DATA
 from melody_generator import MelodyGenerator
 
 
-with open('twinkle_lst.object', 'rb') as f:
+with open('pitch_lst.object', 'rb') as f:
     PITCH_LST = pickle.load(f)
+
+#只用前100个音
+PITCH_LST = PITCH_LST[:100]
+
 # PITCH_LST = [60,61,65,78,65,62,34,55,56,57,58,59,60,62,62,65,65,65,69,69,54]
+
+
 CHECKPOINT_DIR = TRAINING_DIR
 OUT_DIR = 'generate/generate_from_list'
 
